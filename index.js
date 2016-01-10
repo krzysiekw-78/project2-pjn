@@ -1,6 +1,7 @@
 var readline = require('readline');
 var staff = require('./staff+names.json');
 var names = require('./test.json');
+var factories = require('./factories.json');
 var Fuse = require('fuse.js');
 var latinize = require('latinize');
 var fuzzysearch = require('fuzzysearch');
@@ -58,13 +59,17 @@ function deletePrepositions(question) {
 
 function searchKeywords(question) {
 	var keywords = {
+		"biblioteka": ['biblioteka', 'bibliotece', 'biblioteki'],
+		"wydzial": ['wydziale', 'wydzial'],
+		"dziekan": ['dziekani', 'wladze', 'dziekan'],
+		"info": ["info", "informacja", "informacje", "wszystko"],
 		"informator": ['informator'],
+		"zaklad": ["zaklad", "zaklady", "zakladach", "zakladow", "pracownia", "pracowni", "pracownie", "pracowniach"],
 		"pokoj": ["pokoj", "pokoje", "pokoju", "pokoik", "pokoiczek", "pomieszczenie", "izba", "gabinet", "gabinecie", "salka", "miejsce", "miejscu"],
 		"tel": ["tel", "telefon", "telefonu", "telefony", "telefonie", "aparat", "komorka", "komorce", "komorkowy", "komorkowego", "aparatu"],
 		"mail": ["mailowy", "mail", "email", "e-mail", "maila", "emaila", "e-maila"],
 		"www": ["strona", "strony", "stronie", "internetowa", "internetowej", "www", "html", "witryna", "witryny", "portal", "portalu", "wizytowka", "wizytowki", "url"],
-		"stopien": ["stopien", "naukowy", "poziom", "poziomie", "stanowisko", "stanowisku", "stanowiskiem", "doktor", "doktorze", "doktora", "profesor", "profesora", "profesorze", "magister", "magistra", "magistrze"],
-		"info": ["info", "informacja", "informacje", "wszystko"]
+		"stopien": ["stopien", "naukowy", "poziom", "poziomie", "stanowisko", "stanowisku", "stanowiskiem", "doktor", "doktorze", "doktora", "profesor", "profesora", "profesorze", "magister", "magistra", "magistrze"]
 	}
 
 
@@ -86,7 +91,7 @@ function searchKeywords(question) {
 				}
 
 				// for informator (identify year and month)
-				if (parseInt(splittedQuestion[i]) !== NaN){
+				if (parseInt(splittedQuestion[i]) !== NaN) {
 					if (splittedQuestion[i].length <= 2) {
 						numbers['month'] = splittedQuestion[i]
 					}
@@ -105,7 +110,7 @@ function searchKeywords(question) {
 
 	if (foundKeywords.length > 0) {
 		var keyword = chooseMostCommonKeyword(foundKeywords)
-		switch(keyword) {
+		switch (keyword) {
 			case "informator":
 				// console.log('informator!')
 				if (numbers['month'] !== undefined && numbers['year'] !== undefined) {
@@ -113,6 +118,18 @@ function searchKeywords(question) {
 				} else {
 					console.log('Nie podano numeru miesiąca oraz roku. Np. "informator 7 2014"');
 				}
+				break;
+			case "zaklad":
+				getFactory(cleanedSplittedQuestion);
+				break;
+			case "biblioteka":
+				getSimpleInformation('biblioteka')
+				break;
+			case "wydzial":
+				getSimpleInformation('wydzial')
+				break;
+			case "dziekan":
+				getSimpleInformation('dziekan')
 				break;
 			case "pokoj":
 				fuzzySearchName(cleanedSplittedQuestion, keyword)
@@ -134,12 +151,12 @@ function searchKeywords(question) {
 				break;
 		}
 	} else {
-		console.log('Brak słów kluczowych')
+		console.log('Brak słów kluczowych.')
 	}
 }
 
 
-function chooseMostCommonKeyword(foundKeywords){
+function chooseMostCommonKeyword(foundKeywords) {
 	var counts = {};
 	foundKeywords.forEach(function(x) {
 		counts[x] = (counts[x] || 0) + 1;
@@ -155,7 +172,7 @@ function chooseMostCommonKeyword(foundKeywords){
 		}
 	}
 
-	console.log(mostCommonKeyword)
+	// console.log(mostCommonKeyword)
 	return mostCommonKeyword;
 }
 
@@ -236,7 +253,7 @@ function fuzzySearchName(splittedQuestion, keyword) {
 				for (var i = 0; i < employees.length; i++) {
 					console.log([i] + ".", employees[i].imie, employees[i].nazwisko);
 				}
-				rl.question("\nDoprecyzuj o jaką osobę chciałeś zapytać, podaj numer pracownika z listy przedstawionej powyżej.", function(anwser) {
+				rl.question("\nDoprecyzuj o jaką osobę chciałeś zapytać, podaj numer pracownika z listy przedstawionej powyżej.\n", function(anwser) {
 					// getInformationAboutEmployee(employees[anwser].id, foundKeywords);
 					getInformationAboutEmployee(employees[anwser].id, keyword);
 
@@ -346,22 +363,22 @@ function fetchNewsAboutDepartment() {
 	});
 }
 
-function chooseInformator(data){
+function chooseInformator(data) {
 	informators = data;
 
 	var date = getDate(storeMonth, storeYear)
 	for (key in informators) {
-		if ("Rok "+date.year == key) {
-			if(informators[key][date.month] !== undefined){
-				console.log("Adres informatora ("+date.month+" "+date.year+"): "+informators[key][date.month])
+		if ("Rok " + date.year == key) {
+			if (informators[key][date.month] !== undefined) {
+				console.log("Adres informatora (" + date.month + " " + date.year + "): " + informators[key][date.month])
 			} else {
-				console.log("Brak informatora ("+date.month+" "+date.year+")")
+				console.log("Brak informatora (" + date.month + " " + date.year + ")")
 			}
 		}
 	}
 }
 
-function getInformator(month, year){
+function getInformator(month, year) {
 
 
 	return fetchNewsAboutDepartment()
@@ -369,12 +386,12 @@ function getInformator(month, year){
 		.then(chooseInformator)
 }
 
-function storeDate(month, year){
+function storeDate(month, year) {
 	storeMonth = month;
 	storeYear = year;
 }
 
-function getDate(month, year){
+function getDate(month, year) {
 	var months = {
 		"styczeń": [1],
 		"luty": [2],
@@ -395,11 +412,76 @@ function getDate(month, year){
 	var month = parseInt(month);
 
 	for (key in months) {
-		if(months[key] == month){
+		if (months[key] == month) {
 			date['month'] = key;
-		} 
+		}
 	}
 	return date;
 }
 // -------------------------------------------------------------------------------------------------------
 
+function getFactory(splittedQuestion) {
+	if (splittedQuestion.length !== 0) {
+		searchFactory(splittedQuestion)
+	} else {
+		rl.question("\nDoprecyzuj o jaki zakład chodzi.\n", function(anwser) {
+			var splittedAnwser = deletePrepositions(anwser.split(" "))
+			searchFactory(splittedAnwser)
+		})
+	}
+}
+
+
+function searchFactory(anwser) {
+	var foundFactoriesSet = new Set();
+	for (key in factories) {
+		for (var i = 0; i < anwser.length; i++) {
+			if (fuzzysearch(latinize(anwser[i].substr(0, 6).toLowerCase()), latinize(factories[key]['title'].toLowerCase()))) {
+				foundFactoriesSet.add(factories[key])
+			}
+		};
+	}
+
+	var foundFactories = Array.from(foundFactoriesSet);
+
+	if (foundFactories.length === 1) {
+		chooseFactoryById(foundFactories, 0)
+	}
+	if (foundFactories.length === 0) {
+		console.log("Brak wyników :(");
+		recursiveAsyncReadLine();
+	}
+	if (foundFactories.length > 1) {
+		console.log("Znalezione dopasowania: " + foundFactories.length)
+		for (var i = 0; i < foundFactories.length; i++) {
+			console.log([i] + ".", foundFactories[i].title);
+		}
+		rl.question("\nZnaleziono kilka wyników, wybierz numer zakładu\n", function(anwser) {
+			chooseFactoryById(foundFactories, anwser)
+
+		})
+	}
+}
+
+function chooseFactoryById(foundFactories, id) {
+	console.log("Adres internetowy dla: " + foundFactories[id].title + " - " + foundFactories[id].url)
+	recursiveAsyncReadLine();
+}
+
+// -------------------------------------------------------------------------------------------------------
+
+function getSimpleInformation(what) {
+	switch (what) {
+		case "biblioteka":
+			console.log("Kierownikiem biblioteki jest mgr Teresa Nowak.\nBiblioteka jest otwarta w następujących godzinach: \n * Poniedziałek - Piątek: 8:00 - 19:00\n * Sobota: 10:00 - 15:00\n Więcej informacji pod adresem: https: //www.wmi.amu.edu.pl/pl/biblioteka\n");
+			break;
+		case "wydzial":
+			console.log('Wydział Matematyki i Informatyki Uniwersytetu im. Adama Mickiewicza Collegium Mathematicum\nul.Umultowska 87\n 61 - 614 Poznań\n tel.(0 - 61) 829 - 5308\n e - mail: wmiuam@ amu.edu.pl\n Dziekanem wydziału jest prof.dr hab.Jerzy Kaczorowski\n');
+			break;
+		case "dziekan":
+			console.log('Dziekan: prof. dr hab. Jerzy Kaczorowski\nProdziekan ds. studenckich (studia stacjonarne): dr Roman Czarnowski\nProdziekan ds. studenckich (studia niestacjonarne): prof. UAM dr hab. Jerzy Szymański\nProdziekan ds.finansowych i organizacyjnych: prof.UAM dr hab.Marek Wisła\n Prodziekan ds.naukowych: prof.dr hab.Witold Wnuk\n Więcej informacji na temat władz wydziału pod adresem: https: //www.wmi.amu.edu.pl/pl/wladze\n');
+			break;
+	}
+	recursiveAsyncReadLine();
+
+}
