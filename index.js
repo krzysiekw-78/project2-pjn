@@ -11,6 +11,11 @@ var rl = readline.createInterface({
 	input: process.stdin,
 	output: process.stdout
 });
+var L = require("levenshtein")
+
+var informators = {}
+var storeMonth = 0;
+var storeYear = 0;
 
 var recursiveAsyncReadLine = function() {
 	var startQuestions = ["Czy masz jakieś pytanie?\n", "Czego chciałbyś się dowiedzieć?\n", "Proszę zadaj pytanie. :)\n"];
@@ -53,6 +58,7 @@ function deletePrepositions(question) {
 
 function searchKeywords(question) {
 	var keywords = {
+		"informator": ['informator'],
 		"pokoj": ["pokoj", "pokoje", "pokoju", "pokoik", "pokoiczek", "pomieszczenie", "izba", "gabinet", "gabinecie", "salka", "miejsce", "miejscu"],
 		"tel": ["tel", "telefon", "telefonu", "telefony", "telefonie", "aparat", "komorka", "komorce", "komorkowy", "komorkowego", "aparatu"],
 		"mail": ["mailowy", "mail", "email", "e-mail", "maila", "emaila", "e-maila"],
@@ -64,6 +70,7 @@ function searchKeywords(question) {
 
 	var splittedQuestion = deletePrepositions(question.split(" "))
 	var foundKeywords = [];
+	var numbers = {};
 
 	for (var i = 0; i < splittedQuestion.length; i++) {
 		for (key in keywords) {
@@ -71,6 +78,22 @@ function searchKeywords(question) {
 				if (splittedQuestion[i].length >= 3 && fuzzysearch(latinize(splittedQuestion[i].toLowerCase()), keywords[key][j])) {
 					foundKeywords.push(key);
 					splittedQuestion[i] = "" //maybe add numer adres to not delete
+				}
+
+				if (splittedQuestion[i].length >= 3 && new L(latinize(splittedQuestion[i].toLowerCase()), keywords[key][j]) < 1) {
+					foundKeywords.push(key)
+					splittedQuestion[i] = ""
+				}
+
+				// for informator (identify year and month)
+				if (parseInt(splittedQuestion[i]) !== NaN){
+					if (splittedQuestion[i].length <= 2) {
+						numbers['month'] = splittedQuestion[i]
+					}
+
+					if (splittedQuestion[i].length == 4) {
+						numbers['year'] = splittedQuestion[i]
+					}
 				}
 			}
 		}
@@ -81,14 +104,62 @@ function searchKeywords(question) {
 	});
 
 	if (foundKeywords.length > 0) {
-		fuzzySearchName(cleanedSplittedQuestion, foundKeywords)
+		var keyword = chooseMostCommonKeyword(foundKeywords)
+		switch(keyword) {
+			case "informator":
+				// console.log('informator!')
+				if (numbers['month'] !== undefined && numbers['year'] !== undefined) {
+					getInformator(numbers['month'], numbers['year'])
+				} else {
+					console.log('Nie podano numeru miesiąca oraz roku. Np. "informator 7 2014"');
+				}
+				break;
+			case "pokoj":
+				fuzzySearchName(cleanedSplittedQuestion, keyword)
+				break;
+			case "tel":
+				fuzzySearchName(cleanedSplittedQuestion, keyword)
+				break;
+			case "mail":
+				fuzzySearchName(cleanedSplittedQuestion, keyword)
+				break;
+			case "www":
+				fuzzySearchName(cleanedSplittedQuestion, keyword)
+				break;
+			case "stopien":
+				fuzzySearchName(cleanedSplittedQuestion, keyword)
+				break;
+			case "info":
+				fuzzySearchName(cleanedSplittedQuestion, keyword)
+				break;
+		}
 	} else {
 		console.log('Brak słów kluczowych')
 	}
-
 }
 
-function fuzzySearchName(splittedQuestion, foundKeywords) {
+
+function chooseMostCommonKeyword(foundKeywords){
+	var counts = {};
+	foundKeywords.forEach(function(x) {
+		counts[x] = (counts[x] || 0) + 1;
+	});
+
+	var counterKeyword = 0;
+	var mostCommonKeyword = Object.keys(counts)[0];
+
+	for (key in counts) {
+		if (counterKeyword < counts[key]) {
+			counterKeyword = counts[key]
+			mostCommonKeyword = key
+		}
+	}
+
+	console.log(mostCommonKeyword)
+	return mostCommonKeyword;
+}
+
+function fuzzySearchName(splittedQuestion, keyword) {
 	var lowestScore = 0;
 	result = [];
 	items = [];
@@ -127,17 +198,20 @@ function fuzzySearchName(splittedQuestion, foundKeywords) {
 	for (var i = 0; i < sorted.length; i++) {
 		var name = latinize(sorted[i].item.imie.toLowerCase());
 		surname = latinize(sorted[i].item.nazwisko.toLowerCase());
-		passedRegex = 0;
+		passedLevenshtein = 0;
 
 		for (var j = 0; j < splittedQuestion.length; j++) {
-			if (name.search(latinize(splittedQuestion[j].substr(0, 4)).toLowerCase()) !== -1) {
-				passedRegex = passedRegex + 1;
+
+			if (new L(splittedQuestion[j], name).distance < 4) {
+				passedLevenshtein = passedLevenshtein + 1;
 			}
-			if (surname.search(latinize(splittedQuestion[j].substr(0, 4)).toLowerCase()) !== -1) {
-				passedRegex = passedRegex + 1;
+
+			if (new L(splittedQuestion[j], surname).distance < 4) {
+				passedLevenshtein = passedLevenshtein + 1;
 			}
+
 		}
-		sorted[i].success = passedRegex;
+		sorted[i].success = passedLevenshtein;
 	}
 
 	var sortedBySuccess = sortObjectByProperty(sorted, 'success')
@@ -154,13 +228,18 @@ function fuzzySearchName(splittedQuestion, foundKeywords) {
 			}
 			var employees = Array.from(set);
 			if (employees.length === 1) {
-				getInformationAboutEmployee(employees[0].id, foundKeywords);
+				// getInformationAboutEmployee(employees[0].id, foundKeywords);
+				getInformationAboutEmployee(employees[0].id, keyword);
+
+
 			} else {
 				for (var i = 0; i < employees.length; i++) {
 					console.log([i] + ".", employees[i].imie, employees[i].nazwisko);
 				}
 				rl.question("\nDoprecyzuj o jaką osobę chciałeś zapytać, podaj numer pracownika z listy przedstawionej powyżej.", function(anwser) {
-					getInformationAboutEmployee(employees[anwser].id, foundKeywords);
+					// getInformationAboutEmployee(employees[anwser].id, foundKeywords);
+					getInformationAboutEmployee(employees[anwser].id, keyword);
+
 					recursiveAsyncReadLine();
 				});
 			}
@@ -172,21 +251,8 @@ function fuzzySearchName(splittedQuestion, foundKeywords) {
 	}
 }
 
-function getInformationAboutEmployee(id, keywords) {
-	var counts = {};
-	keywords.forEach(function(x) {
-		counts[x] = (counts[x] || 0) + 1;
-	});
-
-	var counterKeyword = 0;
-	var mostCommonKeyword = Object.keys(counts)[0];
-
-	for (key in counts) {
-		if (counterKeyword < counts[key]) {
-			counterKeyword = counts[key]
-			mostCommonKeyword = key
-		}
-	}
+function getInformationAboutEmployee(id, keyword) {
+	var mostCommonKeyword = keyword;
 	var employee = staff[id].imie + " " + staff[id].nazwisko;
 	switch (mostCommonKeyword) {
 		case 'stopien':
@@ -214,74 +280,126 @@ function getInformationAboutEmployee(id, keywords) {
 			console.log("- pokój: " + staff[id].pokoj)
 			console.log("- telefon: " + staff[id].tel)
 			console.log("- e-mail: " + staff[id].mail)
-			console.log("- www: " + staff[id].www)
+			if (staff[id].www !== undefined) {
+				console.log("- www: " + staff[id].www)
+			} else {
+				console.log("- www: brak")
+			}
 			break;
 	}
 	console.log("______________________");
 }
 
 
-function getNewsAboutDepartment() {
-	console.log("Pobieranie informacji...")
+// -------------------------------------------------------------------------------------------------------
+
+function fetchNewsAboutDepartment() {
+	console.log("Pobieranie informatora...")
 	return new Promise(function(resolve, reject) {
 
-		var body;
-		var informators = {}
+		if (Object.keys(informators).length === 0) {
+			var body;
+			var data = {}
 
-		https.get("https://info.wmi.amu.edu.pl/", function(res) {
-			res.setEncoding('utf8');
-			res.on('data', function(chunk) {
-				var dom = jsdom.defaultLevel;
+			https.get("https://info.wmi.amu.edu.pl/", function(res) {
+				res.setEncoding('utf8');
+				res.on('data', function(chunk) {
+					var dom = jsdom.defaultLevel;
 
-				var document = jsdom.jsdom(chunk, {
-					features: {
-						QuerySelector: true
-					}
-				});
+					var document = jsdom.jsdom(chunk, {
+						features: {
+							QuerySelector: true
+						}
+					});
 
-				var index = 0;
+					var index = 0;
 
-				var a = document.querySelector('#informatorsHome')
-				if (a != null) {
-					var b = a.querySelectorAll('ul');
-					for (var i = 0; i < b.length; i++) {
-						for (var j = 0; j < b[i].querySelectorAll('li').length; j++) {
-							if (b[i].querySelectorAll('li')[j].textContent[0] === "R") {
-								var year = b[i].querySelectorAll('li')[j].textContent;
-								index = 0;
-							} else {
-								var href = b[i].querySelectorAll('li')[j].innerHTML;
-								var month = b[i].querySelectorAll('li')[j].textContent;
-								index = index + 1;
-							}
-							if (index == 0) {
-								informators[year] = {}
-							} else {
-								var a = href.substr(href.indexOf('="') + 2);
-								var preparedHref = 'https://info.wmi.amu.edu.pl' + a.substr(0, a.indexOf(">") - 1)
-								informators[year][month] = preparedHref;
+					var a = document.querySelector('#informatorsHome')
+					if (a != null) {
+						var b = a.querySelectorAll('ul');
+						for (var i = 0; i < b.length; i++) {
+							for (var j = 0; j < b[i].querySelectorAll('li').length; j++) {
+								if (b[i].querySelectorAll('li')[j].textContent[0] === "R") {
+									var year = b[i].querySelectorAll('li')[j].textContent;
+									index = 0;
+								} else {
+									var href = b[i].querySelectorAll('li')[j].innerHTML;
+									var month = b[i].querySelectorAll('li')[j].textContent;
+									index = index + 1;
+								}
+								if (index == 0) {
+									data[year] = {}
+								} else {
+									var a = href.substr(href.indexOf('="') + 2);
+									var preparedHref = 'https://info.wmi.amu.edu.pl' + a.substr(0, a.indexOf(">") - 1)
+									data[year][month] = preparedHref;
+								}
 							}
 						}
 					}
-				}
-				resolve(informators)
+					resolve(data)
+				});
 			});
-		});
+		} else {
+			resolve(informators)
+		}
 	});
 }
 
-function itterate(informators){
-	console.log('poszlo')
+function chooseInformator(data){
+	informators = data;
 
+	var date = getDate(storeMonth, storeYear)
 	for (key in informators) {
-		console.log('wypisuje', key)
-		console.log(informators[key])
+		if ("Rok "+date.year == key) {
+			if(informators[key][date.month] !== undefined){
+				console.log("Adres informatora ("+date.month+" "+date.year+"): "+informators[key][date.month])
+			} else {
+				console.log("Brak informatora ("+date.month+" "+date.year+")")
+			}
+		}
 	}
 }
 
-function test(){
-	return getNewsAboutDepartment()
-		.then(itterate)
+function getInformator(month, year){
+
+
+	return fetchNewsAboutDepartment()
+		.then(storeDate(month, year))
+		.then(chooseInformator)
 }
 
-test();
+function storeDate(month, year){
+	storeMonth = month;
+	storeYear = year;
+}
+
+function getDate(month, year){
+	var months = {
+		"styczeń": [1],
+		"luty": [2],
+		"marzec": [3],
+		"kwiecień": [4],
+		"maj": [5],
+		"czerwiec": [6],
+		"lipiec": [7],
+		"sierpień": [8],
+		"wrzesień": [9],
+		"październik": [10],
+		"listopad": [11],
+		"grudzień": [12]
+	}
+
+	var date = {};
+	date['year'] = year;
+	var month = parseInt(month);
+
+	for (key in months) {
+		if(months[key] == month){
+			date['month'] = key;
+		} 
+	}
+	return date;
+}
+// -------------------------------------------------------------------------------------------------------
+
